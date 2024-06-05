@@ -4,9 +4,6 @@ from torch.nn.parameter import Parameter
 from scipy import interpolate
 import numpy as np
 
-from typeguard import typechecked
-from torchtyping import TensorType
-
 # fmt: off
 nr_of_hz_bands_per_bark_band_16k = [
     1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 2,
@@ -78,7 +75,7 @@ pow_dens_correction_factor_16k = [
 Sp_16k = 6.910853e-006
 
 
-def interp(values: list, nelms_new: int) -> TensorType:
+def interp(values: list, nelms_new: int):
     """Apply linear interpolation to the list of values
 
     Parameters
@@ -172,10 +169,7 @@ class BarkScale(torch.nn.Module):
         self.fbank = Parameter(fbank, requires_grad=False)
         self.total_width = self.width_bark[1:].sum()
 
-    @typechecked
-    def weighted_norm(
-        self, tensor: TensorType["batch", "frame", "band"], p: float = 2
-    ) -> TensorType["batch", "frame"]:
+    def weighted_norm(self, tensor, p=2):
         """Calculates the p-norm taking band width into consideration
 
         Parameters
@@ -194,10 +188,7 @@ class BarkScale(torch.nn.Module):
             self.width_bark * tensor / self.total_width ** (1 / p)
         )[:, :, 1:].norm(p, dim=2)
 
-    @typechecked
-    def forward(
-        self, tensor: TensorType["batch", "frame", "band"]
-    ) -> TensorType["batch", "frame", "bark"]:
+    def forward(self, tensor):
         """Converts a Hz-scaled spectrogram to a Bark-scaled spectrogram
 
         Parameters
