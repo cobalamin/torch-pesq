@@ -10,7 +10,7 @@ Implementation of the widely used Perceptual Evaluation of Speech Quality (PESQ)
 
 To install the package just run:
 ```bash
-$ pip install torch-pesq
+$ pip install git+https://github.com/cobalamin/torch-pesq.git@ede5afcf518653d3f738c5c8d10e15a76c5a8b79
 ```
 
 ## Usage
