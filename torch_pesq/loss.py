@@ -1,11 +1,17 @@
 import torch
+import math
 import numpy as np
+import warnings
 
 from scipy.signal import butter
-from torch.nn.functional import unfold
+from torch.nn.functional import unfold, pad
 from torch.nn import Parameter
 from torchaudio.functional import lfilter
 from torchaudio.transforms import Spectrogram, Resample
+
+from typeguard import typechecked
+from torchtyping import TensorType
+from typing import Tuple
 
 from .bark import BarkScale
 from .loudness import Loudness
@@ -101,9 +107,10 @@ class PesqLoss(torch.nn.Module):
             requires_grad=False,
         )
 
+    @typechecked
     def align_level(
-        self, signal
-    ):
+        self, signal: TensorType["batch", "sample"]
+    ) -> TensorType["batch", "sample"]:
         """Align power to 10**7 for band 325 to 3.25kHz
 
         Parameters
@@ -129,13 +136,14 @@ class PesqLoss(torch.nn.Module):
         )
 
         # align power
-        signal = signal * (10**7 / power).sqrt()
+        signal = signal * (10**7 / (power + 1e-8)).sqrt()
 
         return signal
 
+    @typechecked
     def preemphasize(
-        self, signal
-    ):
+        self, signal: TensorType["batch", "sample"]
+    ) -> TensorType["batch", "sample"]:
         """Pre-empasize a signal
 
         This pre-emphasize filter is also applied in the reference implementation. The filter
@@ -160,9 +168,10 @@ class PesqLoss(torch.nn.Module):
 
         return signal
 
+    @typechecked
     def raw(
-        self, ref, deg
-    ):
+        self, ref: TensorType["batch", "sample"], deg: TensorType["batch", "sample"]
+    ) -> Tuple[TensorType["batch", "sample"], TensorType["batch", "sample"]]:
         """Calculate symmetric and asymmetric distances"""
         deg, ref = torch.atleast_2d(deg), torch.atleast_2d(ref)
 
@@ -170,7 +179,7 @@ class PesqLoss(torch.nn.Module):
         max_val = torch.max(
             torch.amax(deg.abs(), dim=1, keepdim=True),
             torch.amax(ref.abs(), dim=1, keepdim=True),
-        )
+        ).clamp(min=1e-8)
         deg, ref = deg / max_val, ref / max_val
 
         deg, ref = self.resampler(deg), self.resampler(ref)
@@ -249,18 +258,19 @@ class PesqLoss(torch.nn.Module):
         psqm = (
             unfold(symm_distu.unsqueeze(1).unsqueeze(1), (1, 20), stride=10) ** 6
         ).mean(dim=1) ** (1.0 / 6)
-        d_symm = psqm.square().mean(dim=1).sqrt()
+        d_symm = (psqm.square().mean(dim=1) + 1e-8).sqrt()
 
         psqm = (
             unfold(asymm_distu.unsqueeze(1).unsqueeze(1), (1, 20), stride=10) ** 6
         ).mean(dim=1) ** (1.0 / 6)
-        d_asymm = psqm.square().mean(dim=1).sqrt()
+        d_asymm = (psqm.square().mean(dim=1) + 1e-8).sqrt()
 
         return d_symm, d_asymm
 
+    @typechecked
     def mos(
-        self, ref, deg
-    ):
+        self, ref: TensorType["batch", "sample"], deg: TensorType["batch", "sample"]
+    ) -> TensorType["batch", "sample"]:
         """Calculate Mean Opinion Score
 
         Parameters
@@ -286,9 +296,10 @@ class PesqLoss(torch.nn.Module):
 
         return mos
 
+    @typechecked
     def forward(
-        self, ref, deg
-    ):
+        self, ref: TensorType["batch", "sample"], deg: TensorType["batch", "sample"]
+    ) -> TensorType["batch", "sample"]:
         """Calculate a loss variant of the MOS score
 
         This function combines symmetric and asymmetric distances but does not apply a range
